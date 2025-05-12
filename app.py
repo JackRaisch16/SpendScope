@@ -1,7 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, send_file
 import pandas as pd
 import sqlite3
+from io import BytesIO
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 DB_NAME = 'db/database.db'
@@ -27,7 +29,6 @@ def dashboard():
 
     summary = df.groupby('category')['amount'].sum().reset_index()
 
-    # Sorting logic
     if sort == 'category_asc':
         summary = summary.sort_values(by='category')
     elif sort == 'amount_asc':
@@ -57,7 +58,7 @@ def upload():
     if request.method == 'POST':
         file = request.files['file']
         if file:
-            df = pd.read_csv(file)
+            df = pd.read_(file)
             conn = get_db_connection()
             df.to_sql('transactions', conn, if_exists='append', index=False)
             conn.close()
@@ -71,6 +72,47 @@ def clear_data():
     conn.commit()
     conn.close()
     return redirect(url_for('dashboard'))
+
+
+@app.route('/report')
+def monthly_report():
+    month = request.args.get('month')
+    if not month:
+        return "Month parameter is required, e.g., /report?month=2025-04"
+
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM transactions", conn)
+    conn.close()
+
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    df = df[df['date'].dt.strftime('%Y-%m') == month]
+
+    if df.empty:
+        return f"No transactions found for {month}"
+
+    # Prepare report table
+    report_df = df.groupby('category')['amount'].sum().reset_index()
+    report_df.columns = ['Category', 'Total Spent']
+    report_df['Total Spent'] = report_df['Total Spent'].round(2)
+    report_df['% of Total'] = (report_df['Total Spent'] / report_df['Total Spent'].sum() * 100).round(2)
+
+    # Custom header
+    friendly_month = datetime.strptime(month, "%Y-%m").strftime("%B %Y")
+    header_line = f"SpendScope Monthly Report - {friendly_month}"
+
+    # Convert to CSV with header
+    csv_bytes = BytesIO()
+    csv_bytes.write((header_line + "\n\n").encode('utf-8'))
+    report_df.to_csv(csv_bytes, index=False)
+    csv_bytes.seek(0)
+
+    filename = f"SpendScope_{month}_Report.csv"
+    return send_file(
+        csv_bytes,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename
+    )
 
 if __name__ == '__main__':
     if not os.path.exists('db'):
