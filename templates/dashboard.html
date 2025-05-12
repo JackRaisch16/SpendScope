@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Your Spending Summary</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            background-color: #0f0f1a;
+            color: #f0f0f0;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 30px;
+        }
+
+        h1 {
+            color: #3399ff;
+            font-size: 32px;
+        }
+
+        label {
+            margin-right: 8px;
+        }
+
+        select {
+            padding: 6px;
+            background-color: #1e1e2f;
+            color: #f0f0f0;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            margin-left: 10px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-refresh {
+            background-color: #3399ff;
+            color: white;
+        }
+
+        .btn-clear {
+            background-color: #cc0000;
+            color: white;
+        }
+
+        table {
+            margin-top: 20px;
+            width: 400px;
+            border-collapse: collapse;
+            background-color: #1a1a2e;
+            color: white;
+        }
+
+        th, td {
+            border: 1px solid #444;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #222244;
+        }
+
+        a {
+            color: #3399ff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .chart-container {
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome Back! Here's Your Spending Breakdown</h1>
+
+    <!-- Filters -->
+    <form method="GET" action="/" style="display:inline;">
+        <label for="month">Filter by Month:</label>
+        <select name="month" onchange="this.form.submit()">
+            <option value="">All</option>
+            {% for m in all_months %}
+                <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <form method="GET" action="/" style="display:inline;">
+        <input type="hidden" name="month" value="{{ selected_month }}">
+        <label for="sort">Sort by:</label>
+        <select name="sort" onchange="this.form.submit()">
+            <option value="">Default</option>
+            <option value="category_asc" {% if sort == 'category_asc' %}selected{% endif %}>Category (A–Z)</option>
+            <option value="amount_desc" {% if sort == 'amount_desc' %}selected{% endif %}>Amount (High to Low)</option>
+            <option value="amount_asc" {% if sort == 'amount_asc' %}selected{% endif %}>Amount (Low to High)</option>
+        </select>
+    </form>
+
+    <form method="GET" action="/" style="display:inline;">
+        <button type="submit" class="btn-refresh">Refresh</button>
+    </form>
+
+    <form method="POST" action="/clear" style="display:inline;" onsubmit="return confirm('Clear all your data?');">
+        <button type="submit" class="btn-clear">Clear All</button>
+    </form>
+
+    <p><strong>Total Spent:</strong> ${{ "%.2f"|format(total) }}</p>
+
+    <!-- Table -->
+    <table>
+        <tr>
+            <th>Category</th>
+            <th>Amount</th>
+        </tr>
+        {% for row in summary %}
+        <tr>
+            <td>{{ row[0] }}</td>
+            <td>${{ "%.2f"|format(row[1]) }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <!-- Bar Chart -->
+    <div id="chart" class="chart-container" style="width:700px;height:400px;"></div>
+
+    <script>
+        const categories = {{ summary | map(attribute=0) | list | tojson }};
+        const amounts = {{ summary | map(attribute=1) | list | tojson }};
+
+        const barData = [{
+            x: categories,
+            y: amounts,
+            type: 'bar',
+            marker: { color: '#3399ff' }
+        }];
+
+        const barLayout = {
+            title: 'Spending by Category',
+            xaxis: { title: 'Category' },
+            yaxis: { title: 'Amount ($)' },
+            paper_bgcolor: '#0f0f1a',
+            plot_bgcolor: '#0f0f1a',
+            font: { color: '#f0f0f0' }
+        };
+
+        Plotly.newPlot('chart', barData, barLayout);
+    </script>
+
+    <!-- Pie Chart -->
+    <div id="pie-chart" class="chart-container" style="width:700px;height:400px;"></div>
+
+    <script>
+        const pieData = [{
+            labels: categories,
+            values: amounts,
+            type: 'pie',
+            textinfo: 'none',
+            hoverinfo: 'label+value+percent',
+            marker: {
+                line: {
+                    color: 'white',
+                    width: 2
+                }
+            }
+        }];
+
+        const pieLayout = {
+            title: {
+                text: 'Spending Distribution by Category',
+                font: { size: 22 }
+            },
+            paper_bgcolor: '#0f0f1a',
+            plot_bgcolor: '#0f0f1a',
+            font: { color: '#f0f0f0' },
+            legend: {
+                x: 1,
+                y: 0.5,
+                font: { size: 12 }
+            },
+            margin: { t: 60, l: 40, r: 120, b: 40 }
+        };
+
+        Plotly.newPlot('pie-chart', pieData, pieLayout);
+    </script>
+
+    <br>
+    <a href="/upload">Need to upload something new?</a>
+</body>
+</html>
